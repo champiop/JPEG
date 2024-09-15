@@ -1,0 +1,11 @@
+#ifndef ENCODING_H
+#define ENCODING_H
+
+#include <stdio.h>
+#include <stdint.h>
+
+void WriteHeader(FILE *outfile, size_t imgWidth, size_t imgHeight);
+void WriteData8x8(FILE *outfile, int16_t *data, int16_t lastValueDC, int colorComponent);
+void WriteEndOfFile(FILE *outfile);
+
+#endif
