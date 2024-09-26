@@ -54,7 +54,7 @@ void float_PrintChunk(size_t sizeX, size_t sizeY, float *chunk)
 
 int main(void)
 {
-    PPM *ppm = PPM_Open("images/suspect.ppm");
+    PPM *ppm = PPM_Open("images/domingo.ppm");
 
     uint8_t *y = (uint8_t *)malloc(8 * 8 * sizeof(uint8_t));
     uint8_t *cb = (uint8_t *)malloc(8 * 8 * sizeof(uint8_t));
