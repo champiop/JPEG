@@ -1,7 +1,7 @@
 CC = gcc
 LD = gcc
 
-CFLAGS = -Wall -Wextra -std=c99 -Iinclude -O0
+CFLAGS = -Wall -Wextra -std=c99 -Iinclude -O0 -g
 
 SRC_FILES=$(wildcard src/*.c)
 OBJ_FILES=$(patsubst src/%.c,obj/%.o,$(SRC_FILES))

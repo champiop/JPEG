@@ -53,7 +53,7 @@ void WriteHeaderAPP0(FILE *outfile)
     fputc(0xff, outfile);
     fputc(0xe0, outfile);
 
-    // SECTION LENGTHs
+    // SECTION LENGTHS
     fputc(0x00, outfile);
     fputc(0x10, outfile);
 
@@ -112,7 +112,7 @@ void WriteHeaderDQT(FILE *outfile)
     }
 }
 
-void WriteHeaderSOF0(FILE *outfile, size_t imgWidth, size_t imgHeight, uint8_t colorComponentCount)
+void WriteHeaderSOF0(FILE *outfile, size_t imgWidth, size_t imgHeight, uint8_t colorComponentCount, int dsh_Y, int dsv_Y, int dsh_Cb, int dsv_Cb, int dsh_Cr, int dsv_Cr)
 {
     // 0xFFC0
     fputc(0xff, outfile);
@@ -141,7 +141,8 @@ void WriteHeaderSOF0(FILE *outfile, size_t imgWidth, size_t imgHeight, uint8_t c
     fputc(0x00, outfile);
 
     // 4 BITS H SAMPLING FACTOR (1 TO 4) + 4 BITS V SAMPLING FACTOR (1 TO 4)
-    fputc(0x11, outfile);
+    uint8_t ds_Y = (dsh_Y << 4) + dsv_Y;
+    fputc(ds_Y, outfile);
 
     // ASSOCIATED QUANTIZATION TABLE ID
     fputc(0x00, outfile);
@@ -151,7 +152,8 @@ void WriteHeaderSOF0(FILE *outfile, size_t imgWidth, size_t imgHeight, uint8_t c
     fputc(0x01, outfile);
 
     // 4 BITS H SAMPLING FACTOR (1 TO 4) + 4 BITS V SAMPLING FACTOR (1 TO 4)
-    fputc(0x11, outfile);
+    uint8_t ds_Cb = (dsh_Cb << 4) + dsv_Cb;
+    fputc(ds_Cb, outfile);
 
     // ASSOCIATED QUANTIZATION TABLE ID
     fputc(0x01, outfile);
@@ -161,7 +163,8 @@ void WriteHeaderSOF0(FILE *outfile, size_t imgWidth, size_t imgHeight, uint8_t c
     fputc(0x02, outfile);
 
     // 4 BITS H SAMPLING FACTOR (1 TO 4) + 4 BITS V SAMPLING FACTOR (1 TO 4)
-    fputc(0x11, outfile);
+    uint8_t ds_Cr = (dsh_Cr << 4) + dsv_Cr;
+    fputc(ds_Cr, outfile);
 
     // ASSOCIATED QUANTIZATION TABLE ID
     fputc(0x01, outfile);
@@ -299,7 +302,7 @@ void WriteHeaderSOS(FILE *outfile)
     fputc(0x00, outfile);
 }
 
-void WriteHeader(FILE *outfile, size_t imgWidth, size_t imgHeight)
+void WriteHeader(FILE *outfile, size_t imgWidth, size_t imgHeight, int dsh_Y, int dsv_Y, int dsh_Cb, int dsv_Cb, int dsh_Cr, int dsv_Cr)
 {
     // 0xFFD8
     fputc(0xff, outfile);
@@ -307,7 +310,7 @@ void WriteHeader(FILE *outfile, size_t imgWidth, size_t imgHeight)
 
     WriteHeaderAPP0(outfile);
     WriteHeaderDQT(outfile);
-    WriteHeaderSOF0(outfile, imgWidth, imgHeight, 3);
+    WriteHeaderSOF0(outfile, imgWidth, imgHeight, 3, dsh_Y, dsv_Y, dsh_Cb, dsv_Cb, dsh_Cr, dsv_Cr);
     WriteHeaderDHT(outfile);
     WriteHeaderSOS(outfile);
 

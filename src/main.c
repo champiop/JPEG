@@ -10,6 +10,7 @@
 #include "zigzag.h"
 #include "quantization.h"
 #include "encoding.h"
+#include "downsampling.h"
 
 #include <stdio.h>
 
@@ -54,52 +55,157 @@ void float_PrintChunk(size_t sizeX, size_t sizeY, float *chunk)
 
 int main(void)
 {
-    PPM *ppm = PPM_Open("images/domingo.ppm");
+    // TODO parsing args to use the jpeg encoder in the shell
+    PPM *ppm = PPM_Open("images/sunny.ppm");
 
-    uint8_t *y = (uint8_t *)malloc(8 * 8 * sizeof(uint8_t));
-    uint8_t *cb = (uint8_t *)malloc(8 * 8 * sizeof(uint8_t));
-    uint8_t *cr = (uint8_t *)malloc(8 * 8 * sizeof(uint8_t));
+    size_t dsh_Y = 2;
+    size_t dsv_Y = 2;
+    size_t dsh_Cb = 1;
+    size_t dsv_Cb = 2;
+    size_t dsh_Cr = 1;
+    size_t dsv_Cr = 1;
 
-    float *dctY = (float *)malloc(8 * 8 * sizeof(float));
-    float *dctCb = (float *)malloc(8 * 8 * sizeof(float));
-    float *dctCr = (float *)malloc(8 * 8 * sizeof(float));
+    size_t dsfh_Y = 1;
+    size_t dsfv_Y = 1;
+    size_t dsfh_Cb = dsh_Y / dsh_Cb;
+    size_t dsfv_Cb = dsv_Y / dsv_Cb;
+    size_t dsfh_Cr = dsh_Y / dsh_Cr;
+    size_t dsfv_Cr = dsv_Y / dsv_Cr;
 
-    int16_t *quantizationY = (int16_t *)malloc(8 * 8 * sizeof(int16_t));
-    int16_t *quantizationCb = (int16_t *)malloc(8 * 8 * sizeof(int16_t));
-    int16_t *quantizationCr = (int16_t *)malloc(8 * 8 * sizeof(int16_t));
+    size_t mcuSizeX = 8 * dsh_Y;
+    size_t mcuSizeY = 8 * dsv_Y;
+
+    uint8_t *mcuY = (uint8_t *)malloc(mcuSizeX * mcuSizeY * sizeof(uint8_t));
+    uint8_t *mcuCb = (uint8_t *)malloc(mcuSizeX * mcuSizeY * sizeof(uint8_t));
+    uint8_t *mcuCr = (uint8_t *)malloc(mcuSizeX * mcuSizeY * sizeof(uint8_t));
+
+    uint8_t *blocsY = (uint8_t *)malloc(dsh_Y * 8 * dsv_Y * 8 * sizeof(uint8_t));
+    uint8_t *blocsCb = (uint8_t *)malloc(dsh_Cb * 8 * dsv_Cb * 8 * sizeof(uint8_t));
+    uint8_t *blocsCr = (uint8_t *)malloc(dsh_Cr * 8 * dsv_Cr * 8 * sizeof(uint8_t));
+
+    float *dct = (float *)malloc(8 * 8 * sizeof(float));
+
+    int16_t *quantization = (int16_t *)malloc(8 * 8 * sizeof(int16_t));
 
     int16_t lastDC_Y = 0;
     int16_t lastDC_Cb = 0;
     int16_t lastDC_Cr = 0;
 
     FILE *outfile = fopen("out/out.jpg", "wb");
-    WriteHeader(outfile, PPM_GetWidth(ppm), PPM_GetHeight(ppm));
+    WriteHeader(outfile, PPM_GetWidth(ppm), PPM_GetHeight(ppm), dsh_Y, dsv_Y, dsh_Cb, dsv_Cb, dsh_Cr, dsv_Cr);
 
-    for (int i = 0; i < PPM_GetHeight(ppm) / 8 + (PPM_GetHeight(ppm) % 8 == 0 ? 0 : 1); i++)
+    for (int i = 0; i < PPM_GetHeight(ppm) / mcuSizeY + (PPM_GetHeight(ppm) % mcuSizeY == 0 ? 0 : 1); i++)
     {
-        for (int j = 0; j < PPM_GetWidth(ppm) / 8 + (PPM_GetWidth(ppm) % 8 == 0 ? 0 : 1); j++)
+        for (int j = 0; j < PPM_GetWidth(ppm) / mcuSizeX + (PPM_GetWidth(ppm) % mcuSizeX == 0 ? 0 : 1); j++)
         {
-            PPM_ReadChunk(ppm, 8 * j, 8 * i, 8 * (j + 1), 8 * (i + 1), y, cb, cr);
+            PPM_ReadChunk(ppm, mcuSizeX * j, mcuSizeY * i, mcuSizeX * (j + 1), mcuSizeY * (i + 1), mcuY, mcuCb, mcuCr);
 
             printf("--- DEFAULT MCU ---\n");
             printf("CHANNEL 1 :\n");
-            uint8_PrintChunk(8, 8, y);
+            uint8_PrintChunk(mcuSizeX, mcuSizeY, mcuY);
             printf("CHANNEL 2 :\n");
-            uint8_PrintChunk(8, 8, cb);
+            uint8_PrintChunk(mcuSizeX, mcuSizeY, mcuCb);
             printf("CHANNEL 3 :\n");
-            uint8_PrintChunk(8, 8, cr);
+            uint8_PrintChunk(mcuSizeX, mcuSizeY, mcuCr);
 
-            ConvertRGBToYCbCr(64, y, cb, cr);
+            ConvertRGBToYCbCr(mcuSizeX * mcuSizeY, mcuY, mcuCb, mcuCr);
 
             printf("--- CONVERSION MCU ---\n");
             printf("CHANNEL 1 :\n");
-            uint8_PrintChunk(8, 8, y);
+            uint8_PrintChunk(mcuSizeX, mcuSizeY, mcuY);
             printf("CHANNEL 2 :\n");
-            uint8_PrintChunk(8, 8, cb);
+            uint8_PrintChunk(mcuSizeX, mcuSizeY, mcuCb);
             printf("CHANNEL 3 :\n");
-            uint8_PrintChunk(8, 8, cr);
+            uint8_PrintChunk(mcuSizeX, mcuSizeY, mcuCr);
 
-            Offset(64, y);
+            sampleMCU(mcuSizeX, mcuSizeY, dsfh_Y, dsfv_Y, mcuY, blocsY);
+            sampleMCU(mcuSizeX, mcuSizeY, dsfh_Cb, dsfv_Cb, mcuCb, blocsCb);
+            sampleMCU(mcuSizeX, mcuSizeY, dsfh_Cr, dsfv_Cr, mcuCr, blocsCr);
+
+            printf("--- DOWNSAMPLING MCU ---\n");
+            printf("CHANNEL 1 :\n");
+            for (int k = 0; k < dsh_Y * dsv_Y; k++)
+            {
+                uint8_t *bloc = &blocsY[k * 64];
+
+                printf("BLOC %d :\n", k);
+                uint8_PrintChunk(8, 8, bloc);
+
+                printf("-- OFFSET BLOC --\n");
+                Offset(64, bloc);
+                uint8_PrintChunk(8, 8, bloc);
+
+                printf("--- DCT BLOC ---\n");
+                DCT8x8(dct, (int8_t *)bloc);
+                float_PrintChunk(8, 8, dct);
+
+                printf("--- ZIGZAG BLOC ---\n");
+                Zigzag8x8(dct);
+                float_PrintChunk(8, 8, dct);
+
+                printf("--- QUANTIZATION BLOC ---\n");
+                Quantization8x8_Y(quantization, dct);
+
+                WriteData8x8(outfile, quantization, lastDC_Y, 0);
+
+                lastDC_Y = quantization[0];
+            }
+            printf("CHANNEL 2 :\n");
+            for (int k = 0; k < dsh_Cb * dsv_Cb; k++)
+            {
+                uint8_t *bloc = &blocsCb[k * 64];
+
+                printf("BLOC %d :\n", k);
+                uint8_PrintChunk(8, 8, bloc);
+
+                printf("-- OFFSET BLOC --\n");
+                Offset(64, bloc);
+                uint8_PrintChunk(8, 8, bloc);
+
+                printf("--- DCT BLOC ---\n");
+                DCT8x8(dct, (int8_t *)bloc);
+                float_PrintChunk(8, 8, dct);
+
+                printf("--- ZIGZAG BLOC ---\n");
+                Zigzag8x8(dct);
+                float_PrintChunk(8, 8, dct);
+
+                printf("--- QUANTIZATION BLOC ---\n");
+                Quantization8x8_CbCr(quantization, dct);
+
+                WriteData8x8(outfile, quantization, lastDC_Cb, 1);
+
+                lastDC_Cb = quantization[0];
+            }
+            printf("CHANNEL 3 :\n");
+            for (int k = 0; k < dsh_Cr * dsv_Cr; k++)
+            {
+                uint8_t *bloc = &blocsCr[k * 64];
+
+                printf("BLOC %d :\n", k);
+                uint8_PrintChunk(8, 8, bloc);
+
+                printf("-- OFFSET BLOC --\n");
+                Offset(64, bloc);
+                uint8_PrintChunk(8, 8, bloc);
+
+                printf("--- DCT BLOC ---\n");
+                DCT8x8(dct, (int8_t *)bloc);
+                float_PrintChunk(8, 8, dct);
+
+                printf("--- ZIGZAG BLOC ---\n");
+                Zigzag8x8(dct);
+                float_PrintChunk(8, 8, dct);
+
+                printf("--- QUANTIZATION BLOC ---\n");
+                Quantization8x8_CbCr(quantization, dct);
+
+                WriteData8x8(outfile, quantization, lastDC_Cr, 2);
+
+                lastDC_Cr = quantization[0];
+            }
+
+            /*Offset(64, y);
             Offset(64, cb);
             Offset(64, cr);
 
@@ -153,23 +259,23 @@ int main(void)
 
             lastDC_Y = quantizationY[0];
             lastDC_Cb = quantizationCb[0];
-            lastDC_Cr = quantizationCr[0];
+            lastDC_Cr = quantizationCr[0];*/
         }
     }
 
     WriteEndOfFile(outfile);
 
-    free(y);
-    free(cb);
-    free(cr);
+    free(mcuY);
+    free(mcuCb);
+    free(mcuCr);
 
-    free(dctY);
-    free(dctCb);
-    free(dctCr);
+    free(blocsY);
+    free(blocsCb);
+    free(blocsCr);
 
-    free(quantizationY);
-    free(quantizationCb);
-    free(quantizationCr);
+    free(dct);
+
+    free(quantization);
 
     fclose(outfile);
 
